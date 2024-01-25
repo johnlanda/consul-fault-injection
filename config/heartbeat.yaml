@@ -1,48 +1,50 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  name: counting
+  name: heartbeat
   namespace: default
 automountServiceAccountToken: true
 ---
 apiVersion: v1
 kind: Service
 metadata:
-  name: counting
+  name: heartbeat
   namespace: default
   labels:
-    app: counting
+    app: heartbeat
 spec:
   type: ClusterIP
   ports:
     - port: 9001
       targetPort: 9001
   selector:
-    app: counting
+    app: heartbeat
 ---
 apiVersion: apps/v1
 kind: Deployment
 metadata:
   labels:
-    app: counting
-  name: counting
+    app: heartbeat
+  name: heartbeat
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app: counting
+      app: heartbeat
   template:
     metadata:
       annotations:
         consul.hashicorp.com/connect-inject: 'true'
       labels:
-        app: counting
+        app: heartbeat
     spec:
-      serviceAccountName: counting
+      serviceAccountName: heartbeat
       containers:
-        - name: counting
-          #image: localhost:5001/counting-service
-          image: hashicorp/counting-service:0.0.2
-          imagePullPolicy: IfNotPresent
+        - name: heartbeat
+          image: localhost:5001/heartbeat-service
+          imagePullPolicy: Always
           ports:
             - containerPort: 9001
+          env:
+            - name: PORT
+              value: '9001'

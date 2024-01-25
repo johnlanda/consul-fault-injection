@@ -6,12 +6,6 @@
 ./scripts/create-kind-cluster-with-registry.sh
 ```
 
-## Install observability stack
-
-```bash
-./scripts/install-obs.sh
-```
-
 ## Build Consul Enterprise docker image
 
 ```bash
@@ -19,6 +13,13 @@ cd $CONSUL_ENTERPRISE_REPO
 make dev-docker
 docker tag 'hashicorp/consul-enterprise:local' 'localhost:5001/consul-enterprise:local'
 docker push 'localhost:5001/consul-enterprise:local'
+```
+
+## Build and publish test applications
+
+```bash
+cd $CONSUL_FAULT_INJECTION_DEMO_REPO
+(cd services && make all)
 ```
 
 ## Create the Consul namespace and license secret
@@ -58,16 +59,7 @@ consul license get
 ## Deploy the services
 
 ```bash
-kubectl apply -f ./config/counting.yaml && kubectl apply -f ./config/dashboard.yaml
-```
-
-## Create the proxy, mesh, and service defaults
-
-```bash
-consul config write ./config/defaults/mesh-defaults.hcl
-consul config write ./config/defaults/proxy-defaults.hcl
-consul config write ./config/defaults/dashboard-defaults.hcl
-consul config write ./config/defaults/counting-defaults.hcl
+kubectl apply -f ./config/heartbeat.yaml && kubectl apply -f ./config/dashboard.yaml
 ```
 
 ## Test the demo application
@@ -76,8 +68,7 @@ consul config write ./config/defaults/counting-defaults.hcl
 kubectl port-forward svc/dashboard --namespace default 9002:9002
 ```
 
-Open http://localhost:9002 in your browser, and you should see that the counting service is not available. The dashboard
-will show a count of `-1`.
+Open http://localhost:9002 in your browser, and you should that there are no current requests reaching the heartbeat service.
 
 ## Create the intentions to allow the services to communicate
 
@@ -87,26 +78,34 @@ kubectl apply -f ./config/intentions.yaml
 
 ## Re-test the demo application
 
-Ensure that the dashboard port-forward is still running, and refresh the page. The dashboard should now show an increasing count.
+Ensure that the dashboard port-forward is still running, and refresh the page. The dashboard should now show successful requests.
 
-## View trace data of functioning services
+## Create the proxy, mesh, and service defaults
 
 ```bash
-kubectl port-forward -n observability <jaeger-pod> 16686:16686
+consul config write ./config/defaults/mesh-defaults.hcl
+consul config write ./config/defaults/proxy-defaults.hcl
+consul config write ./config/defaults/dashboard-defaults.hcl
+consul config write ./config/defaults/heartbeat-defaults.hcl
 ```
 
-Navigate to http://localhost:16686 and view the traces.
+The dashboard should now show all requests going through the proxies.
 
 ## Create the fault injection filters
 
 ```bash
-
+consul config write ./config/fault-injection/dashboard-fault-injection.hcl
 ```
 
-## Observe failures in tracing
+Note that 50% of the requests will now have a 500 status code injected from the filter.
 
-Ensure that the jaeger port-forward is still running, and navigate to http://localhost:16686. You should now be able to
-see requests with injected failures or delays based on the configured fault injection filters.
+## Change to a delay injection filter
+
+```bash
+consul consul config write ./config/fault-injection/dashboard-delay-injection.hcl
+```
+
+Note that statuses are all 200 now, however, 50% of requests are delayed by 500 milliseconds.
 
 ## Cleanup
 

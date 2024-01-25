@@ -10,6 +10,11 @@ build-services:
 	@cd heartbeat-service && make build
 	@cd dashboard-service && make build
 
+docker-publish-local:
+	@echo "Publishing services docker images to local registry..."
+	@cd heartbeat-service && make docker-publish-local
+	@cd dashboard-service && make docker-publish-local
+
 .PHONY: build
 build: build-services
 

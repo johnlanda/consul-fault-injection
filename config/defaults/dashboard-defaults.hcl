@@ -1,3 +1,3 @@
 Kind = "service-defaults"
-Name = "server"
+Name = "dashboard"
 MutualTLSMode = "strict"

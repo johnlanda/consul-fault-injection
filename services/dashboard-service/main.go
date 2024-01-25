@@ -10,7 +10,7 @@ import (
 
 // PageData struct to hold data for rendering the homepage
 type PageData struct {
-	Timestamp    string
+	Timestamp    time.Time
 	StatusCode   int
 	Latency      time.Duration
 	ServerHeader string
@@ -27,11 +27,16 @@ func main() {
 	http.HandleFunc("/", homeHandler)
 	go makePeriodicRequests()
 
-	fmt.Printf("Dashboard Service is running on :%d\n", port)
-	http.ListenAndServe(port, nil)
+	fmt.Printf("Dashboard Service is running on :%s\n", port)
+	err := http.ListenAndServe(fmt.Sprintf(":%s", port), nil)
+	if err != nil {
+		fmt.Errorf("error starting server: %w", err)
+	}
 }
 
 func homeHandler(w http.ResponseWriter, r *http.Request) {
+	fmt.Printf("Received request from %s\n", r.RemoteAddr)
+
 	// Display the last 10 requests in the page
 	tmpl, err := template.New("index").Parse(`
 		<html>
@@ -87,7 +92,7 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 					<tr>
 						<td>{{.Timestamp}}</td>
 						<td>{{.StatusCode}}</td>
-						<td>{{.Latency}} milliseconds</td>
+						<td>{{.Latency}}</td>
 						<td>{{.ServerHeader}}</td>
 					</tr>
 				{{end}}
@@ -107,29 +112,33 @@ func homeHandler(w http.ResponseWriter, r *http.Request) {
 		reversedHistory[i], reversedHistory[j] = reversedHistory[j], reversedHistory[i]
 	}
 
-	tmpl.Execute(w, reversedHistory)
+	err = tmpl.Execute(w, reversedHistory)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 }
 
 func makePeriodicRequests() {
 	for {
+		fmt.Printf("making heartbeat request to %s\n", heartbeatServiceURL)
 
 		t0 := time.Now()
 		// Make an HTTP GET request to the heartbeat service
 		resp, err := http.Get(heartbeatServiceURL)
 		if err != nil {
-			fmt.Println("Error making request:", err)
+			fmt.Println("error making request:", err)
 			continue
 		}
 
 		// Extract relevant information from the response
-		timestamp := time.Now().Format(time.RFC3339)
 		statusCode := resp.StatusCode
 		latency := time.Since(t0)
 		serverHeader := resp.Header.Get("Server")
 
 		// Update request history
 		requestHistory = append(requestHistory, PageData{
-			Timestamp:    timestamp,
+			Timestamp:    time.Now(),
 			StatusCode:   statusCode,
 			Latency:      latency,
 			ServerHeader: serverHeader,

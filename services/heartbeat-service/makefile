@@ -9,7 +9,7 @@ build-heartbeat:
 	@echo "Building heartbeat-service..."
 	@go build -o dist/heartbeat-service main.go
 
-docker-build: build
+docker-build:
 	@echo "Building heartbeat-service docker image..."
 	@docker build -t heartbeat-service .
 

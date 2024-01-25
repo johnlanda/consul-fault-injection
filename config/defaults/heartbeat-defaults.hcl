@@ -1,3 +1,3 @@
 Kind = "service-defaults"
-Name = "client"
+Name = "heartbeat"
 MutualTLSMode = "strict"

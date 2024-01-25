@@ -1,10 +1,10 @@
 apiVersion: consul.hashicorp.com/v1alpha1
 kind: ServiceIntentions
 metadata:
-  name: dashboard-to-counting
+  name: dashboard-to-heartbeat
 spec:
   destination:
-    name: counting
+    name: heartbeat
   sources:
     - name: dashboard
       action: allow

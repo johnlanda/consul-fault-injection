@@ -1,6 +1,7 @@
-FROM alpine:3.19
+FROM golang:1.21-alpine
 WORKDIR /app
-ADD . /app
-EXPOSE 9001
-ENV PORT 9001
-CMD ["./dist/dashboard-service"]
+COPY go.* ./
+RUN go mod download
+COPY *.go ./
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=arm64 go build -o /dashboard-service
+CMD ["/dashboard-service"]

@@ -35,18 +35,19 @@ spec:
     metadata:
       annotations:
         consul.hashicorp.com/connect-inject: 'true'
-        consul.hashicorp.com/connect-service-upstreams: 'counting:9001'
+        consul.hashicorp.com/connect-service-upstreams: 'heartbeat:9001'
       labels:
         app: dashboard
     spec:
       serviceAccountName: dashboard
       containers:
         - name: dashboard
-          #image: localhost:5001/dashboard-service
-          image: hashicorp/dashboard-service:0.0.4
-          imagePullPolicy: IfNotPresent
+          image: localhost:5001/dashboard-service
+          imagePullPolicy: Always
           ports:
             - containerPort: 9002
           env:
-            - name: COUNTING_SERVICE_URL
+            - name: HEARTBEAT_SERVICE_URL
               value: 'http://localhost:9001'
+            - name: PORT
+              value: '9002'

@@ -6,9 +6,12 @@ import (
 	"os"
 )
 
-func main() {
-	serverID := getEnvOrDefault("HEARTBEAT_SERVER_ID", "Heartbeat Service")
+var (
+	port     = getEnvOrDefault("PORT", "8080")
+	serverID = getEnvOrDefault("HEARTBEAT_SERVER_ID", "Heartbeat Service")
+)
 
+func main() {
 	// Define the HTTP handler function
 	http.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
 		// Set the Server header with the value of HEARTBEAT_SERVER_ID
@@ -20,7 +23,10 @@ func main() {
 
 	// Start the server on port 8081
 	fmt.Println("Heartbeat Service is running on :8000")
-	http.ListenAndServe(":8000", nil)
+	err := http.ListenAndServe(fmt.Sprintf(":%s", port), nil)
+	if err != nil {
+		fmt.Errorf("error starting server: %w", err)
+	}
 }
 
 func getEnvOrDefault(key, fallback string) string {
