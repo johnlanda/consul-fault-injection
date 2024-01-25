@@ -94,7 +94,7 @@ The dashboard should now show all requests going through the proxies.
 ## Create the fault injection filters
 
 ```bash
-consul config write ./config/fault-injection/dashboard-fault-injection.hcl
+consul config write ./config/fault-injection/heartbeat-fault-injection.hcl
 ```
 
 Note that 50% of the requests will now have a 500 status code injected from the filter.
@@ -102,7 +102,7 @@ Note that 50% of the requests will now have a 500 status code injected from the 
 ## Change to a delay injection filter
 
 ```bash
-consul consul config write ./config/fault-injection/dashboard-delay-injection.hcl
+consul consul config write ./config/fault-injection/heartbeat-delay-injection.hcl
 ```
 
 Note that statuses are all 200 now, however, 50% of requests are delayed by 500 milliseconds.
