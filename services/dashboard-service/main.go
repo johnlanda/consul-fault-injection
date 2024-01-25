@@ -1,49 +1,151 @@
-// Copyright (c) HashiCorp, Inc.
-// SPDX-License-Identifier: MPL-2.0
-
 package main
 
 import (
-	"encoding/json"
-	"expvar"
 	"fmt"
-	"io"
-	"log"
+	"html/template"
 	"net/http"
 	"os"
-	"sync"
 	"time"
-
-	rice "github.com/GeertJohan/go.rice"
-	"github.com/gorilla/mux"
-	gosocketio "github.com/graarh/golang-socketio"
-	"github.com/graarh/golang-socketio/transport"
 )
 
-var countingServiceURL string
-var port string
+// PageData struct to hold data for rendering the homepage
+type PageData struct {
+	Timestamp    string
+	StatusCode   int
+	Latency      time.Duration
+	ServerHeader string
+}
+
+var (
+	port                = getEnvOrDefault("PORT", "8080")
+	heartbeatServiceURL = getEnvOrDefault("HEARTBEAT_SERVICE_URL", "http://localhost:8000")
+	requestHistory      []PageData
+	maxHistorySize      = 10
+)
 
 func main() {
-	port = getEnvOrDefault("PORT", "80")
-	portWithColon := fmt.Sprintf(":%s", port)
+	http.HandleFunc("/", homeHandler)
+	go makePeriodicRequests()
 
-	countingServiceURL = getEnvOrDefault("COUNTING_SERVICE_URL", "http://localhost:9001")
+	fmt.Printf("Dashboard Service is running on :%d\n", port)
+	http.ListenAndServe(port, nil)
+}
 
-	fmt.Printf("Starting server on http://0.0.0.0:%s\n", port)
-	fmt.Println("(Pass as PORT environment variable)")
-	fmt.Printf("Using counting service at %s\n", countingServiceURL)
-	fmt.Println("(Pass as COUNTING_SERVICE_URL environment variable)")
+func homeHandler(w http.ResponseWriter, r *http.Request) {
+	// Display the last 10 requests in the page
+	tmpl, err := template.New("index").Parse(`
+		<html>
+		<head>
+			<title>Dashboard Service</title>
+			<style>
+				body {
+					background: linear-gradient(to bottom, #ffffff, #DC447D);
+					color: #000000;
+					font-family: 'Arial', sans-serif;
+					margin: 0;
+					padding: 0;
+					box-sizing: border-box;
+				}
+		
+				h1 {
+					color: #DC447D;
+					text-align: center;
+					margin-top: 20px;
+				}
+		
+				table {
+					width: 80%;
+					margin: 20px auto;
+					border-collapse: collapse;
+					box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+					background-color: #ffffff;
+					border-radius: 8px;
+				}
+		
+				th, td {
+					padding: 15px;
+					text-align: left;
+					border: 1px solid #DC447D;
+				}
+		
+				th {
+					background-color: #DC447D;
+					color: #ffffff;
+				}
+			</style>
+		</head>
+		<body>
+			<h1>Last 10 Requests</h1>
+			<table>
+				<tr>
+					<th>Timestamp</th>
+					<th>Status Code</th>
+					<th>Latency</th>
+					<th>Server</th>
+				</tr>
+				{{range .}}
+					<tr>
+						<td>{{.Timestamp}}</td>
+						<td>{{.StatusCode}}</td>
+						<td>{{.Latency}} milliseconds</td>
+						<td>{{.ServerHeader}}</td>
+					</tr>
+				{{end}}
+			</table>
+		</body>
+		</html>
+	`)
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusInternalServerError)
+		return
+	}
 
-	failTrack := new(failureTracker)
+	// Reverse the requestHistory to display the latest requests first
+	reversedHistory := make([]PageData, len(requestHistory))
+	copy(reversedHistory, requestHistory)
+	for i, j := 0, len(reversedHistory)-1; i < j; i, j = i+1, j-1 {
+		reversedHistory[i], reversedHistory[j] = reversedHistory[j], reversedHistory[i]
+	}
 
-	router := mux.NewRouter()
-	router.PathPrefix("/socket.io/").Handler(startWebsocket(failTrack))
-	router.HandleFunc("/health", HealthHandler)
-	router.HandleFunc("/health/api", HealthAPIHandler(failTrack))
-	router.Handle("/metrics", expvar.Handler())
-	router.PathPrefix("/").Handler(http.FileServer(rice.MustFindBox("assets").HTTPBox()))
+	tmpl.Execute(w, reversedHistory)
+}
 
-	log.Fatal(http.ListenAndServe(portWithColon, router))
+func makePeriodicRequests() {
+	for {
+
+		t0 := time.Now()
+		// Make an HTTP GET request to the heartbeat service
+		resp, err := http.Get(heartbeatServiceURL)
+		if err != nil {
+			fmt.Println("Error making request:", err)
+			continue
+		}
+
+		// Extract relevant information from the response
+		timestamp := time.Now().Format(time.RFC3339)
+		statusCode := resp.StatusCode
+		latency := time.Since(t0)
+		serverHeader := resp.Header.Get("Server")
+
+		// Update request history
+		requestHistory = append(requestHistory, PageData{
+			Timestamp:    timestamp,
+			StatusCode:   statusCode,
+			Latency:      latency,
+			ServerHeader: serverHeader,
+		})
+
+		// Keep only the last 10 requests
+		if len(requestHistory) > maxHistorySize {
+			requestHistory = requestHistory[len(requestHistory)-maxHistorySize:]
+		}
+
+		// Close the response body
+		resp.Body.Close()
+
+		// Sleep for 1 second before making the next request
+		time.Sleep(1 * time.Second)
+	}
 }
 
 func getEnvOrDefault(key, fallback string) string {
@@ -51,138 +153,4 @@ func getEnvOrDefault(key, fallback string) string {
 		return value
 	}
 	return fallback
-}
-
-// HealthHandler returns a successful status and a message.
-// For use by Consul or other processes that need to verify service health.
-func HealthHandler(w http.ResponseWriter, r *http.Request) {
-	w.WriteHeader(http.StatusOK)
-	fmt.Fprintf(w, "Hello, you've hit %s\n", r.URL.Path)
-}
-
-type failureTracker struct {
-	lock     sync.RWMutex
-	latest   bool // indicates condition of most recent connection attempt
-	failures int  // counts the number of consecutive connection failures
-}
-
-func (ft *failureTracker) Count(ok bool) {
-	ft.lock.Lock()
-	defer ft.lock.Unlock()
-
-	if ft.latest = ok; ok {
-		ft.failures = 0
-	} else {
-		ft.failures++
-	}
-}
-
-func (ft *failureTracker) Status() (bool, int) {
-	ft.lock.RLock()
-	defer ft.lock.RUnlock()
-	return ft.latest, ft.failures
-}
-
-// HealthAPIHandler returns the condition of the connectivity between the
-// dashboard and the backend API server.
-func HealthAPIHandler(ft *failureTracker) http.HandlerFunc {
-	return func(w http.ResponseWriter, r *http.Request) {
-		statusOK, failures := ft.Status()
-		if statusOK {
-			w.WriteHeader(http.StatusOK)
-			_, _ = io.WriteString(w, "ok")
-		} else {
-			w.WriteHeader(http.StatusServiceUnavailable)
-			_, _ = io.WriteString(w, fmt.Sprintf(
-				"failures: %d", failures,
-			))
-		}
-	}
-}
-
-func startWebsocket(ft *failureTracker) *gosocketio.Server {
-	server := gosocketio.NewServer(transport.GetDefaultWebsocketTransport())
-
-	fmt.Println("Starting websocket server...")
-	server.On(gosocketio.OnConnection, handleConnectionFunc(ft))
-	server.On("send", handleSendFunc(ft))
-
-	return server
-}
-
-func handleConnectionFunc(ft *failureTracker) func(c *gosocketio.Channel) {
-	return func(c *gosocketio.Channel) {
-		fmt.Println("New client connected")
-		c.Join("visits")
-		handleSendFunc(ft)(c, Count{})
-	}
-}
-
-func handleSendFunc(ft *failureTracker) func(*gosocketio.Channel, Count) string {
-	return func(c *gosocketio.Channel, msg Count) string {
-		count, err := getAndParseCount()
-		if err != nil {
-			count = Count{Count: -1, Message: err.Error(), Hostname: "[Unreachable]"}
-			ft.Count(false)
-		}
-		fmt.Println("Fetched count", count.Count)
-		c.Ack("message", count, time.Second*10)
-		ft.Count(true)
-		return "OK"
-	}
-}
-
-// Count stores a number that is being counted and other data to send to
-// websocket clients.
-type Count struct {
-	Count    int    `json:"count"`
-	Message  string `json:"message"`
-	Hostname string `json:"hostname"`
-}
-
-func getAndParseCount() (Count, error) {
-	url := countingServiceURL
-
-	// NOTE: We use short timeouts so round-robin load balancing
-	// of services can be experienced during lab demos.
-	tr := &http.Transport{
-		IdleConnTimeout: time.Second * 1,
-	}
-
-	httpClient := http.Client{
-		Timeout:   time.Second * 2,
-		Transport: tr,
-	}
-
-	req, err := http.NewRequest(http.MethodGet, url, nil)
-	if err != nil {
-		return Count{}, err
-	}
-
-	req.Header.Set("User-Agent", "HashiCorp Training Lab")
-
-	res, getErr := httpClient.Do(req)
-	if getErr != nil {
-		return Count{}, getErr
-	}
-
-	body, readErr := io.ReadAll(res.Body)
-	if readErr != nil {
-		return Count{}, readErr
-	}
-
-	defer res.Body.Close()
-	return parseCount(body)
-}
-
-func parseCount(body []byte) (Count, error) {
-	textBytes := []byte(body)
-
-	count := Count{}
-	err := json.Unmarshal(textBytes, &count)
-	if err != nil {
-		fmt.Println(err)
-		return count, err
-	}
-	return count, err
 }
