@@ -82,19 +82,38 @@ Ensure that the dashboard port-forward is still running, and refresh the page. T
 
 ## Create the proxy, mesh, and service defaults
 
+Apply the defaults via either `kubectl` or the `consul config write` command.
+
 ```bash
-consul config write ./config/defaults/mesh-defaults.hcl
-consul config write ./config/defaults/proxy-defaults.hcl
-consul config write ./config/defaults/dashboard-defaults.hcl
-consul config write ./config/defaults/heartbeat-defaults.hcl
+kubectl apply -f ./config/defaults/yaml/mesh-defaults.yaml
+kubectl apply -f ./config/defaults/yaml/proxy-defaults.yaml
+kubectl apply -f ./config/defaults/yaml/dashboard-defaults.yaml
+kubectl apply -f ./config/defaults/yaml/heartbeat-defaults.yaml
 ```
+
+Or alternatively:
+
+```bash
+consul config write ./config/defaults/hcl/mesh-defaults.hcl
+consul config write ./config/defaults/hcl/proxy-defaults.hcl
+consul config write ./config/defaults/hcl/dashboard-defaults.hcl
+consul config write ./config/defaults/hcl/heartbeat-defaults.hcl
+```
+
+Note that if you create the defaults via `consul config write`, you will not be able to overwrite them later via `kubectl apply` as the reconciler will fail.
 
 The dashboard should now show all requests going through the proxies.
 
 ## Create the fault injection filters
 
 ```bash
-consul config write ./config/fault-injection/heartbeat-fault-injection.hcl
+kubectl apply -f ./config/fault-injection/yaml/heartbeat-fault-injection.hcl
+```
+
+Or alternatively:
+
+```bash
+consul config write ./config/fault-injection/hcl/heartbeat-fault-injection.hcl
 ```
 
 Note that 50% of the requests will now have a 500 status code injected from the filter.
@@ -102,7 +121,13 @@ Note that 50% of the requests will now have a 500 status code injected from the 
 ## Change to a delay injection filter
 
 ```bash
-consul consul config write ./config/fault-injection/heartbeat-delay-injection.hcl
+kubectl apply -f ./config/fault-injection/yaml/heartbeat-delay-injection.hcl
+```
+
+Or alternatively:
+
+```bash
+consul config write ./config/fault-injection/hcl/heartbeat-delay-injection.hcl
 ```
 
 Note that statuses are all 200 now, however, 50% of requests are delayed by 500 milliseconds.

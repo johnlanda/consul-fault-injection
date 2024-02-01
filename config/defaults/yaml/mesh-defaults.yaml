@@ -1,0 +1,8 @@
+apiVersion: consul.hashicorp.com/v1alpha1
+kind: Mesh
+metadata:
+  name: heartbeat
+spec:
+  allowEnablingPermissiveMutualTLS: false
+  transparentProxy:
+    meshDestinationsOnly: true

@@ -1,0 +1,13 @@
+apiVersion: consul.hashicorp.com/v1alpha1
+kind: ServiceDefaults
+metadata:
+  name: heartbeat
+spec:
+  mutualTLSMode: "strict"
+  envoyExtensions:
+    - name: "builtin/fault-injection"
+      arguments:
+        config:
+          delay:
+            duration: 500
+            percentage: 50
