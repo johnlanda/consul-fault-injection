@@ -205,9 +205,9 @@ func makePeriodicRequests() {
 		}
 		latency := time.Since(t0)
 		var latencyColor string
-		if latency.Milliseconds() < 2 {
+		if latency.Milliseconds() < 50 {
 			latencyColor = "bg-green-500"
-		} else if latency.Seconds() < 3 {
+		} else if latency.Milliseconds() < 200 {
 			latencyColor = "bg-yellow-500"
 		} else {
 			latencyColor = "bg-red-500"
