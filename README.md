@@ -38,6 +38,12 @@ brew install hashicorp/tap/consul-k8s
 consul-k8s install -config-file=./config/values.yaml
 ```
 
+## Install the Consul CLI
+
+```bash
+brew install consul
+```
+
 ## Configure CLI to interact with Consul
 
 ```bash
@@ -107,7 +113,7 @@ The dashboard should now show all requests going through the proxies.
 ## Create the fault injection filters
 
 ```bash
-kubectl apply -f ./config/fault-injection/yaml/heartbeat-fault-injection.hcl
+kubectl apply -f ./config/fault-injection/yaml/heartbeat-fault-injection.yaml
 ```
 
 Or alternatively:
@@ -121,7 +127,7 @@ Note that 50% of the requests will now have a 500 status code injected from the 
 ## Change to a delay injection filter
 
 ```bash
-kubectl apply -f ./config/fault-injection/yaml/heartbeat-delay-injection.hcl
+kubectl apply -f ./config/fault-injection/yaml/heartbeat-delay-injection.yaml
 ```
 
 Or alternatively:
